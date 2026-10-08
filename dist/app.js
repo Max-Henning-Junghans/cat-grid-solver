@@ -2,6 +2,7 @@ import { example, cloneBoard } from './example.js';
 import { techniques, findNextDeduction, applyDeduction, validateBoard, resolveCurrent, resolveUntilStuck } from './solver.js';
 import { translate, colorLetter, unitName, explain } from './i18n.js';
 import { registerAgentTools } from './webmcp.js';
+import { cellsAlongSegment, applyBrush } from './board-input.js';
 
 const $ = selector => document.querySelector(selector);
 let language = 'en';
@@ -16,6 +17,7 @@ let editing = false, tool = 'cycle', selectedColor = 0, uncertain = new Set();
 let undoStack = [], redoStack = [], source = null, busy = false;
 let generationTask = null;
 let cropSelection = null, cropStart = null;
+let pointerStroke = null, strokeFrame = null;
 const t = (key, values) => translate(language, key, values);
 const techniqueName = id => techniques.find(technique => technique.id === id)?.name[language === 'de' ? 1 : 0] || id;
 
@@ -65,30 +67,33 @@ function setGenerationStatus(key, values = {}, error = false) {
 }
 
 function renderBoard() {
+  const shownBoard = pointerStroke?.draft || board;
   const activeCell = document.activeElement?.dataset?.index;
   const element = $('#board');
-  element.style.setProperty('--size', board.size);
+  element.style.setProperty('--size', shownBoard.size);
+  element.classList.toggle('is-dragging', Boolean(pointerStroke?.dragging));
   element.classList.toggle('no-labels', !$('#color-labels').checked);
   element.setAttribute('aria-label', t('board'));
-  element.setAttribute('aria-rowcount', board.size);
-  element.setAttribute('aria-colcount', board.size);
+  element.setAttribute('aria-rowcount', shownBoard.size);
+  element.setAttribute('aria-colcount', shownBoard.size);
   const changes = new Set(currentStep?.changes.map(change => change.index) || []);
   const evidence = new Set(currentStep?.evidence || []);
-  const validation = validateBoard(board);
+  const validation = validateBoard(shownBoard);
   const conflictCells = new Set(validation.valid ? [] : validation.cells);
   element.replaceChildren();
-  for (let rowIndex = 0; rowIndex < board.size; rowIndex++) {
+  for (let rowIndex = 0; rowIndex < shownBoard.size; rowIndex++) {
     const row = document.createElement('div'); row.className = 'board-row'; row.setAttribute('role','row');
-    for (let columnIndex = 0; columnIndex < board.size; columnIndex++) {
-      const i = rowIndex * board.size + columnIndex, region = board.regions[i], mark = board.marks[i];
+    for (let columnIndex = 0; columnIndex < shownBoard.size; columnIndex++) {
+      const i = rowIndex * shownBoard.size + columnIndex, region = shownBoard.regions[i], mark = shownBoard.marks[i];
       const cell = document.createElement('button');
       cell.type = 'button'; cell.className = 'cell'; cell.dataset.index = i;
-      cell.style.setProperty('--cell-color', board.colors[region]);
-      cell.style.setProperty('--cell-ink', textInk(board.colors[region]));
+      cell.style.setProperty('--cell-color', shownBoard.colors[region]);
+      cell.style.setProperty('--cell-ink', textInk(shownBoard.colors[region]));
       cell.setAttribute('role', 'gridcell'); cell.setAttribute('aria-rowindex', rowIndex + 1); cell.setAttribute('aria-colindex', columnIndex + 1);
       cell.setAttribute('aria-label', `${t('cell', { r: rowIndex + 1, c: columnIndex + 1 })}, ${t('colorName', { n: colorLetter(region) })}, ${t(mark === 1 ? 'catMark' : mark === -1 ? 'xMark' : 'emptyMark')}`);
       cell.tabIndex = activeCell != null ? (Number(activeCell) === i ? 0 : -1) : i === 0 ? 0 : -1;
       cell.classList.toggle('changed', changes.has(i)); cell.classList.toggle('evidence', evidence.has(i) && !changes.has(i));
+      cell.classList.toggle('drag-preview', Boolean(pointerStroke?.changed.has(i)));
       cell.classList.toggle('uncertain', uncertain.has(i)); cell.classList.toggle('conflict', conflictCells.has(i));
       const label = document.createElement('span'); label.className = 'color-letter'; label.textContent = colorLetter(region); label.setAttribute('aria-hidden','true');
       const symbol = document.createElement('span'); symbol.className = `mark${mark === -1 ? ' x-mark' : ''}`; symbol.textContent = mark === 1 ? '🐱' : mark === -1 ? '×' : ''; symbol.setAttribute('aria-hidden','true');
@@ -97,8 +102,8 @@ function renderBoard() {
     element.append(row);
   }
   for (const selector of ['#row-labels', '#column-labels']) {
-    const labels = $(selector); labels.style.setProperty('--size', board.size); labels.replaceChildren();
-    for (let i = 1; i <= board.size; i++) { const label = document.createElement('span'); label.textContent = i; labels.append(label); }
+    const labels = $(selector); labels.style.setProperty('--size', shownBoard.size); labels.replaceChildren();
+    for (let i = 1; i <= shownBoard.size; i++) { const label = document.createElement('span'); label.textContent = i; labels.append(label); }
   }
   if (activeCell != null) element.querySelector(`[data-index="${activeCell}"]`)?.focus({ preventScroll: true });
 }
@@ -120,11 +125,13 @@ function renderTechniques() {
 }
 
 function renderTools() {
+  const hintKey = {cat:'catInputHint',erase:'clearInputHint',paint:'colorInputHint'}[tool] || 'inputHint';
+  $('#input-help').dataset.i18n = hintKey; $('#input-help').textContent = t(hintKey);
   $('#edit-toggle').setAttribute('aria-expanded', editing);
   $('#edit-panel').hidden = !editing;
   $('#tools').replaceChildren();
   for (const [id, key] of [['cycle','cycle'],['cat','catTool'],['x','xTool'],['erase','erase'],['paint','paint']]) {
-    const button = document.createElement('button'); button.className = 'tool-button'; button.dataset.tool = id; button.textContent = t(key); button.setAttribute('aria-pressed', tool === id); $('#tools').append(button);
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'tool-button'; button.dataset.tool = id; button.textContent = t(key); button.setAttribute('aria-pressed', tool === id); button.disabled = busy; $('#tools').append(button);
   }
   $('#palette').hidden = tool !== 'paint'; $('#palette').replaceChildren();
   board.colors.forEach((color, index) => {
@@ -203,6 +210,7 @@ function render() {
 }
 
 async function generateGame(options = {}) {
+  cancelStroke();
   if (busy) return {status:'busy'};
   const size = options.size ?? Number($('#generator-size').value), difficulty = options.difficulty ?? $('#generator-difficulty').value;
   if (!Number.isInteger(size) || size < 4 || size > 20 || !['easy','medium','hard','extreme'].includes(difficulty)) {
@@ -237,6 +245,7 @@ async function generateGame(options = {}) {
 }
 
 function nextDeduction() {
+  cancelStroke();
   if (busy) return { status: 'busy' };
   if (uncertain.size) {
     message = { title: 'reviewTitle', body: 'uncertain', values: { count: uncertain.size } }; currentStep = null; render(); return { status: 'review', count: uncertain.size };
@@ -250,6 +259,7 @@ function nextDeduction() {
 }
 
 async function applyDeductions(mode = 'current') {
+  cancelStroke();
   if (busy) return { status: 'busy' };
   if (uncertain.size || !enabled.size) return nextDeduction();
   busy = true; setStatus(mode === 'until' ? 'runWorking' : 'allWorking'); render();
@@ -269,8 +279,9 @@ async function applyDeductions(mode = 'current') {
 
 function editCell(index, forcedTool) {
   if (busy || !Number.isInteger(index) || index < 0 || index >= board.marks.length) return;
-  const currentTool = forcedTool || (editing ? tool : 'cycle');
-  const nextMark = currentTool === 'cycle' ? board.marks[index] === 0 ? 1 : board.marks[index] === 1 ? -1 : 0 : currentTool === 'cat' ? 1 : currentTool === 'x' ? -1 : 0;
+  const currentTool = forcedTool || tool;
+  if (currentTool === 'x' && !forcedTool && board.marks[index] === 1) return;
+  const nextMark = currentTool === 'cycle' ? board.marks[index] === 0 ? 1 : board.marks[index] === 1 ? -1 : 0 : currentTool === 'cat' ? 1 : currentTool === 'x' ? !forcedTool && board.marks[index] === -1 ? 0 : -1 : 0;
   if (currentTool === 'paint' ? board.regions[index] === selectedColor : board.marks[index] === nextMark && !uncertain.has(index)) return;
   record({ manual: true }); board = cloneBoard(board);
   if (currentTool === 'paint') {
@@ -281,10 +292,12 @@ function editCell(index, forcedTool) {
 }
 
 function undo() {
+  if (pointerStroke) { cancelStroke(); return true; }
   if (busy || !undoStack.length) return false;
   const entry = undoStack.pop(); redoStack.push({ state: snapshot(), entry }); restore(entry.before); render(); return true;
 }
 function redo() {
+  cancelStroke();
   if (busy || !redoStack.length) return false;
   const entry = redoStack.pop(); undoStack.push(entry.entry); restore(entry.state); render(); return true;
 }
@@ -305,16 +318,97 @@ $('#technique-list').addEventListener('change', event => {
   persistTechniques(); message = null; renderTechniques(); renderDeduction();
 });
 for (const [id, on] of [['all-on',true],['all-off',false]]) $(`#${id}`).addEventListener('click', () => { enabled = new Set(on ? techniques.map(technique => technique.id) : []); persistTechniques(); message = null; renderTechniques(); renderDeduction(); });
-$('#edit-toggle').addEventListener('click', () => { editing = !editing; renderTools(); });
-$('#tools').addEventListener('click', event => { const button = event.target.closest('[data-tool]'); if (button) { tool = button.dataset.tool; renderTools(); } });
+$('#edit-toggle').addEventListener('click', () => { editing = !editing; tool = editing ? 'paint' : 'cycle'; renderTools(); });
+$('#tools').addEventListener('click', event => { const button = event.target.closest('[data-tool]'); if (button && !busy) { tool = button.dataset.tool; editing = tool === 'paint'; renderTools(); } });
 $('#palette').addEventListener('click', event => {
   if(busy)return;
   const button = event.target.closest('[data-color]'); if (button) { selectedColor = Number(button.dataset.color); renderTools(); }
   if(event.target.closest('[data-add-color]')) { const color=$('#new-color').value;record({manual:true});board=cloneBoard(board);selectedColor=board.colors.length;board.colors.push(color);currentStep=null;message={title:'manualTitle',body:'manual'};render(); }
 });
 $('#color-labels').addEventListener('change', renderBoard);
-$('#board').addEventListener('click', event => { const cell = event.target.closest('[data-index]'); if (cell) editCell(Number(cell.dataset.index)); });
+// Pointer gestures handle mouse, pen, and touch. Keep native keyboard/AT clicks.
+$('#board').addEventListener('click', event => { const cell = event.target.closest('[data-index]'); if (cell && event.detail === 0) editCell(Number(cell.dataset.index)); });
+$('#board').addEventListener('contextmenu', event => event.preventDefault());
+$('#board').addEventListener('dragstart', event => event.preventDefault());
+
+function point(event) { return {x:event.clientX,y:event.clientY}; }
+function cellAtPoint(position,rectangles) {
+  return rectangles.find(cell => position.x>=cell.left && position.x<=cell.right && position.y>=cell.top && position.y<=cell.bottom)?.index;
+}
+function previewStroke(indices) {
+  if (!pointerStroke?.brush) return;
+  const fresh = indices.filter(index => !pointerStroke.visited.has(index));
+  if (!fresh.length) return;
+  fresh.forEach(index => pointerStroke.visited.add(index));
+  const result = applyBrush(pointerStroke.draft,fresh,pointerStroke.brush);
+  pointerStroke.draft = result.board;
+  result.changed.forEach(index => pointerStroke.changed.add(index));
+  result.reviewed.forEach(index => pointerStroke.reviewed.add(index));
+  if (strokeFrame === null) strokeFrame = requestAnimationFrame(() => { strokeFrame = null; renderBoard(); });
+}
+function releaseStroke(stroke) {
+  if (strokeFrame !== null) { cancelAnimationFrame(strokeFrame); strokeFrame = null; }
+  const grid = $('#board');
+  if (grid.hasPointerCapture(stroke.pointerId)) grid.releasePointerCapture(stroke.pointerId);
+}
+function cancelStroke() {
+  if (!pointerStroke) return;
+  const stroke = pointerStroke; pointerStroke = null; releaseStroke(stroke); renderBoard();
+}
+$('#board').addEventListener('pointerdown', event => {
+  const cell = event.target.closest('[data-index]');
+  if (!cell || busy || pointerStroke || !event.isPrimary || ![0,2].includes(event.button)) return;
+  event.preventDefault();
+  const index = Number(cell.dataset.index), selectedTool = event.button === 2 ? 'x' : tool;
+  const brush = ['x','erase','paint'].includes(selectedTool) ? {tool:selectedTool,value:board.marks[index]===-1?0:-1,color:selectedColor} : null;
+  const rectangles = [...$('#board').querySelectorAll('.cell')].map(element => {
+    const rect = element.getBoundingClientRect();
+    return {index:Number(element.dataset.index),left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
+  });
+  pointerStroke = {pointerId:event.pointerId,tool:selectedTool,start:index,from:point(event),last:point(event),rectangles,brush,draft:board,visited:new Set(),changed:new Set(),reviewed:new Set(),dragging:false};
+  $('#board').querySelectorAll('.cell').forEach(element => { element.tabIndex = element === cell ? 0 : -1; });
+  cell.focus({preventScroll:true});
+  $('#board').setPointerCapture(event.pointerId);
+  if (brush) previewStroke([index]);
+});
+function moveStroke(event) {
+  const stroke = pointerStroke;
+  if (!stroke || event.pointerId !== stroke.pointerId) return;
+  const position = point(event);
+  if (!stroke.dragging && Math.hypot(position.x-stroke.from.x,position.y-stroke.from.y)>=8) {
+    stroke.dragging = true;
+    if (stroke.tool === 'cycle') {
+      stroke.brush = {tool:'x',value:board.marks[stroke.start]===-1?0:-1};
+      previewStroke([stroke.start]);
+    }
+  }
+  if (stroke.brush) previewStroke(cellsAlongSegment(stroke.last,position,stroke.rectangles));
+  stroke.last = position;
+  if (stroke.dragging && event.type === 'pointermove' && event.cancelable) event.preventDefault();
+}
+document.addEventListener('pointermove', moveStroke);
+document.addEventListener('pointerup', event => {
+  const stroke = pointerStroke;
+  if (!stroke || event.pointerId !== stroke.pointerId) return;
+  moveStroke(event);
+  pointerStroke = null; releaseStroke(stroke);
+  if (stroke.brush) {
+    const reviewed = [...stroke.reviewed].filter(index => uncertain.has(index));
+    if (stroke.changed.size || reviewed.length) {
+      record({manual:true}); board = stroke.draft;
+      reviewed.forEach(index => uncertain.delete(index));
+      currentStep = null; message = {title:'manualTitle',body:'manual'};
+    }
+    render();
+  } else if (!stroke.dragging && cellAtPoint(point(event),stroke.rectangles) === stroke.start) editCell(stroke.start,stroke.tool);
+  else renderBoard();
+});
+document.addEventListener('pointercancel', event => { if (event.pointerId === pointerStroke?.pointerId) cancelStroke(); });
+$('#board').addEventListener('lostpointercapture', event => { if (event.pointerId === pointerStroke?.pointerId) cancelStroke(); });
+window.addEventListener('blur', cancelStroke);
+window.addEventListener('scroll', cancelStroke, true);
 $('#board').addEventListener('keydown', event => {
+  if (pointerStroke) return;
   const cell = event.target.closest('[data-index]'); if (!cell) return;
   const index = Number(cell.dataset.index), r = Math.floor(index / board.size), c = index % board.size;
   const destination = { ArrowLeft: r * board.size + Math.max(0,c-1), ArrowRight: r * board.size + Math.min(board.size-1,c+1), ArrowUp: Math.max(0,r-1)*board.size+c, ArrowDown: Math.min(board.size-1,r+1)*board.size+c }[event.key];
@@ -322,6 +416,7 @@ $('#board').addEventListener('keydown', event => {
   else if ([' ','c','C','x','X','Delete','Backspace'].includes(event.key)) { event.preventDefault(); editCell(index, event.key === ' ' ? 'cycle' : ['c','C'].includes(event.key) ? 'cat' : ['x','X'].includes(event.key) ? 'x' : 'erase'); }
 });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && pointerStroke) { event.preventDefault(); cancelStroke(); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.target.matches('input,textarea,select') && !document.querySelector('dialog[open]')) { event.preventDefault(); event.shiftKey ? redo() : undo(); }
 });
 $('#reset').addEventListener('click', () => $('#reset-dialog').showModal());
@@ -329,6 +424,7 @@ $('#reset-confirm').addEventListener('click', () => { record({ reset: true }); b
 
 // Image recognition is loaded only when importing; no server receives image data.
 async function importImage(input, sample = false, crop = null, forcedSize = 0) {
+  cancelStroke();
   if (busy) return;
   if (input instanceof File && (!/^image\/(png|jpeg|webp)$/.test(input.type))) { setStatus('fileError', {}, true); return; }
   if (input instanceof Blob && input.size > 25 * 1024 * 1024) { setStatus('tooLarge', {}, true); return; }
@@ -403,10 +499,12 @@ export const appActions = {
   read: () => ({ board: cloneBoard(board), enabled: [...enabled], language, uncertain: [...uncertain], validation: validateBoard(board) }),
   next: nextDeduction, all: () => applyDeductions('current'), run: () => applyDeductions('until'), undo, generate: generateGame,
   configure(ids) {
+    cancelStroke();
     if (!Array.isArray(ids) || ids.some(id => !techniques.some(technique => technique.id === id))) throw new Error('Unknown technique');
     enabled = new Set(ids); persistTechniques(); render(); return { enabled: [...enabled] };
   },
   edit(cells) {
+    cancelStroke();
     if (!Array.isArray(cells) || cells.some(cell => !Number.isInteger(cell.index) || cell.index < 0 || cell.index >= board.marks.length || ![0,1,-1].includes(cell.mark))) throw new Error('Invalid cell edit');
     if (busy) throw new Error('Image import in progress');
     record({ manual: true }); board = cloneBoard(board);

@@ -4,7 +4,7 @@ A local browser app that imports colored cat grid puzzle screenshots, generates 
 
 An independent project with an original demo puzzle and generated test images. It is not affiliated with any puzzle app publisher.
 
-![Cat Grid Solver with the Garden puzzle and an explained deduction](preview.jpg)
+![Cat Grid Solver with puzzle generation, input tools, and an explained deduction](preview.jpg)
 
 ## Start
 
@@ -25,7 +25,7 @@ npm start
 
 1. Choose, drop, or paste a PNG, JPEG, or WebP screenshot. **Try sample** imports the original Garden puzzle image through the same recognition pipeline.
 2. Review the detected board. If needed, use **Adjust crop / size** to drag a rectangle around the entire colored grid and select its size. Square grids from 2×2 to 20×20 are supported; puzzles must have a valid solution under the rules below.
-3. Click a cell to cycle between cat, X, and empty. **Edit board** provides explicit mark tools and a color brush. Choose a swatch to correct a region; **Add color** creates a missing color. Amber outlines flag uncertain recognition. Correct those cells before solving.
+3. Click a cell to cycle between cat, X, and empty. The tools above the board select **Cat**, **X**, **Clear**, or **Color** directly. **Edit colors** opens the color palette. Choose a swatch to correct a region; **Add color** creates a missing color. Amber outlines flag uncertain recognition. Correct those cells before solving.
 4. Enable the techniques you want to use, then choose one of the three solve actions:
 
 | Action | Behavior |
@@ -39,6 +39,8 @@ Every batch is one undoable action. **Undo** and **Redo** restore both board mar
 The language selector is always available. Language and technique preferences are remembered on this device. Puzzle work stays in the current tab and is reset on reload. Screenshot pixels are processed on your computer and are never uploaded. The app makes no external network requests.
 
 Arrow keys move between cells. Space cycles a mark, C places a cat, X excludes a cell, and Delete clears it. Ctrl+Z / Cmd+Z undoes a change; add Shift to redo.
+
+Drag across cells to mark Xs, even with **Cycle marks** selected. Start on an X to erase Xs for the entire stroke. Right-click also toggles X and supports dragging. X strokes skip existing cats. Select **Clear** to drag away any marks, including cats; **Color** paints regions by dragging. Re-entering a cell during a stroke does not toggle it again. Mouse, pen, and touch use the same controls, with a live preview. Each finished stroke is one Undo action. Escape or an interrupted gesture cancels the preview. A Cat-tool drag does not stamp multiple cats. Dragging inside the grid marks cells; scroll the page from outside the grid on touch devices.
 
 ## Rules and techniques
 
