@@ -1,0 +1,12 @@
+{
+  "name": "cat-grid-solver",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local, bilingual screenshot-based cat grid logic solver",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node scripts/check.mjs"
+  }
+}
