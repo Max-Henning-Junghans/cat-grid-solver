@@ -16,20 +16,26 @@ export function cellsAlongSegment(from,to,rectangles) {
 }
 
 export function applyBrush(board,indices,brush) {
-  const marks=[...board.marks],regions=[...board.regions],changed=[],reviewed=[];
+  const marks=[...board.marks],regions=[...board.regions],suspected=marks.map((mark,index)=>mark===0&&Boolean(board.suspected?.[index])),changed=[],reviewed=[];
   for(const index of new Set(indices)) {
     if(!Number.isInteger(index)||index<0||index>=marks.length) continue;
-    // Exclusion strokes never replace a cat, including an X-erasing stroke.
-    if(brush.tool==='x'&&marks[index]===1) continue;
-    reviewed.push(index);
+    // Personal hints remain ordinary empty cells for the solver, but are
+    // protected from manual exclusion strokes, just like confirmed cats.
+    if(brush.tool==='x'&&(marks[index]===1||suspected[index])) continue;
+    if(brush.tool==='suspected'&&marks[index]===1) continue;
+    if(brush.tool==='suspected'&&!brush.value&&!suspected[index]) continue;
+    if(brush.tool!=='suspected') reviewed.push(index);
     if(brush.tool==='paint') {
       if(regions[index]!==brush.color) { regions[index]=brush.color; changed.push(index); }
+    } else if(brush.tool==='suspected') {
+      const value=Boolean(brush.value);
+      if(marks[index]!==0||suspected[index]!==value) { marks[index]=0; suspected[index]=value; changed.push(index); }
     } else {
       const value=brush.tool==='erase'?0:brush.value;
-      if(marks[index]!==value) { marks[index]=value; changed.push(index); }
+      if(marks[index]!==value||suspected[index]) { marks[index]=value; suspected[index]=false; changed.push(index); }
     }
   }
-  const next={...board,marks,regions};
+  const next={...board,marks,regions,suspected};
   if(brush.tool==='paint'&&changed.length&&board.generation) next.generation={...board.generation,edited:true};
   return {board:next,changed,reviewed};
 }

@@ -88,6 +88,22 @@ test('the solver leaves an ambiguous board without inventing a cat', () => {
   assert.equal(findNextDeduction(board).status,'stuck');
 });
 
+test('personal hints never affect validation, selected deductions, snapshot passes, or chained solving',()=>{
+  const plain=cloneBoard(example),hinted={...cloneBoard(example),suspected:Array(example.marks.length).fill(true)};
+  assert.deepEqual(validateBoard(hinted),validateBoard(plain));
+  for(const technique of techniques) assert.deepEqual(findNextDeduction(hinted,[technique.id]),findNextDeduction(plain,[technique.id]));
+  assert.equal(findNextDeduction(hinted,[]).status,'stuck');
+  for(const solve of [resolveCurrent,resolveUntilStuck]) {
+    const expected=solve(plain),actual=solve(hinted);
+    assert.equal(actual.status,expected.status);assert.deepEqual(actual.steps,expected.steps);assert.deepEqual(actual.board.marks,expected.board.marks);
+    for(const step of actual.steps) for(const {index} of step.changes) assert.equal(actual.board.suspected[index],false);
+    assert.ok(hinted.suspected.every(Boolean),'solving must not mutate hints in the input or Undo snapshot');
+  }
+  const first=findNextDeduction(hinted),changed=applyDeduction(hinted,first.step);
+  assert.equal(changed.suspected[12],false);assert.equal(changed.marks[12],1);
+  assert.equal(changed.suspected[0],true,'unresolved hints stay visible');
+});
+
 test('every technique is sound against all solutions of seeded variable-size boards', () => {
   let seed = 87231;
   const random = () => { seed = (Math.imul(seed,1664525)+1013904223)>>>0; return seed / 2**32; };

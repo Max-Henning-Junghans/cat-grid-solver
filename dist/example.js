@@ -15,4 +15,4 @@ export const example = {
   marks: Array(64).fill(0),
 };
 
-export const cloneBoard = board => ({ ...board, colors: [...board.colors], regions: [...board.regions], marks: [...board.marks] });
+export const cloneBoard = board => ({ ...board, colors: [...board.colors], regions: [...board.regions], marks: [...board.marks], ...(board.suspected ? {suspected:[...board.suspected]} : {}) });

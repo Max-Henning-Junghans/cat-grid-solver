@@ -137,11 +137,13 @@ function* deductions(board, enabled) {
 
 export function applyDeduction(board, step) {
   const marks = [...board.marks];
+  const suspected = board.suspected ? [...board.suspected] : null;
   for (const { index, value } of step.changes) {
     if (!Number.isInteger(index) || index < 0 || index >= marks.length || marks[index] !== 0 || ![1, -1].includes(value)) throw new Error('Invalid deduction');
     marks[index] = value;
+    if (suspected) suspected[index] = false;
   }
-  return { ...board, marks };
+  return { ...board, marks, ...(suspected ? {suspected} : {}) };
 }
 
 export function resolveCurrent(board, enabled = techniques.map(technique => technique.id)) {

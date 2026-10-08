@@ -85,18 +85,20 @@ function renderBoard() {
     const row = document.createElement('div'); row.className = 'board-row'; row.setAttribute('role','row');
     for (let columnIndex = 0; columnIndex < shownBoard.size; columnIndex++) {
       const i = rowIndex * shownBoard.size + columnIndex, region = shownBoard.regions[i], mark = shownBoard.marks[i];
+      const suspected = mark === 0 && Boolean(shownBoard.suspected?.[i]);
       const cell = document.createElement('button');
       cell.type = 'button'; cell.className = 'cell'; cell.dataset.index = i;
       cell.style.setProperty('--cell-color', shownBoard.colors[region]);
       cell.style.setProperty('--cell-ink', textInk(shownBoard.colors[region]));
       cell.setAttribute('role', 'gridcell'); cell.setAttribute('aria-rowindex', rowIndex + 1); cell.setAttribute('aria-colindex', columnIndex + 1);
-      cell.setAttribute('aria-label', `${t('cell', { r: rowIndex + 1, c: columnIndex + 1 })}, ${t('colorName', { n: colorLetter(region) })}, ${t(mark === 1 ? 'catMark' : mark === -1 ? 'xMark' : 'emptyMark')}`);
+      cell.setAttribute('aria-label', `${t('cell', { r: rowIndex + 1, c: columnIndex + 1 })}, ${t('colorName', { n: colorLetter(region) })}, ${t(mark === 1 ? 'catMark' : mark === -1 ? 'xMark' : suspected ? 'suspectedMark' : 'emptyMark')}`);
       cell.tabIndex = activeCell != null ? (Number(activeCell) === i ? 0 : -1) : i === 0 ? 0 : -1;
       cell.classList.toggle('changed', changes.has(i)); cell.classList.toggle('evidence', evidence.has(i) && !changes.has(i));
       cell.classList.toggle('drag-preview', Boolean(pointerStroke?.changed.has(i)));
       cell.classList.toggle('uncertain', uncertain.has(i)); cell.classList.toggle('conflict', conflictCells.has(i));
       const label = document.createElement('span'); label.className = 'color-letter'; label.textContent = colorLetter(region); label.setAttribute('aria-hidden','true');
-      const symbol = document.createElement('span'); symbol.className = `mark${mark === -1 ? ' x-mark' : ''}`; symbol.textContent = mark === 1 ? '🐱' : mark === -1 ? '×' : ''; symbol.setAttribute('aria-hidden','true');
+      const symbol = document.createElement('span'); symbol.className = `mark${mark === -1 ? ' x-mark' : suspected ? ' suspected-mark' : ''}`; symbol.textContent = mark === 1 || suspected ? '🐱' : mark === -1 ? '×' : ''; symbol.setAttribute('aria-hidden','true');
+      if (suspected) { const badge = document.createElement('span'); badge.className = 'suspected-badge'; badge.textContent = '?'; symbol.append(badge); }
       cell.append(label, symbol); row.append(cell);
     }
     element.append(row);
@@ -125,12 +127,12 @@ function renderTechniques() {
 }
 
 function renderTools() {
-  const hintKey = {cat:'catInputHint',erase:'clearInputHint',paint:'colorInputHint'}[tool] || 'inputHint';
+  const hintKey = {cat:'catInputHint',suspected:'suspectedInputHint',erase:'clearInputHint',paint:'colorInputHint'}[tool] || 'inputHint';
   $('#input-help').dataset.i18n = hintKey; $('#input-help').textContent = t(hintKey);
   $('#edit-toggle').setAttribute('aria-expanded', editing);
   $('#edit-panel').hidden = !editing;
   $('#tools').replaceChildren();
-  for (const [id, key] of [['cycle','cycle'],['cat','catTool'],['x','xTool'],['erase','erase'],['paint','paint']]) {
+  for (const [id, key] of [['cycle','cycle'],['cat','catTool'],['suspected','suspectedTool'],['x','xTool'],['erase','erase'],['paint','paint']]) {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'tool-button'; button.dataset.tool = id; button.textContent = t(key); button.setAttribute('aria-pressed', tool === id); button.disabled = busy; $('#tools').append(button);
   }
   $('#palette').hidden = tool !== 'paint'; $('#palette').replaceChildren();
@@ -189,12 +191,14 @@ function render() {
   for (const [count, label] of [[`${catCount}/${board.size}`, 'cats'], [board.marks.filter(mark => mark === 0).length, 'open'], [historySteps().length, 'steps']]) {
     const stat = document.createElement('span'), number = document.createElement('strong'); number.textContent = count; stat.append(number, document.createTextNode(t(label))); $('#stats').append(stat);
   }
+  const hintCount = board.marks.filter((mark,index) => mark === 0 && board.suspected?.[index]).length;
+  if (hintCount) { const stat = document.createElement('span'), number = document.createElement('strong'); number.textContent = hintCount; stat.append(number,document.createTextNode(t('personalHints'))); $('#stats').append(stat); }
   $('#undo').disabled = busy || undoStack.length === 0; $('#redo').disabled = busy || redoStack.length === 0;
   $('#next').disabled = busy; $('#choose-image').disabled = busy; $('#sample').disabled = busy;
   $('#apply-all').disabled = busy; $('#apply-all').title = t('allHint');
   $('#run').disabled = busy; $('#run').title = t('runHint');
   $('#all-on').disabled = busy; $('#all-off').disabled = busy;
-  $('#reset').disabled = busy || board.marks.every(mark => mark === 0);
+  $('#reset').disabled = busy || board.marks.every(mark => mark === 0) && !board.suspected?.some(Boolean);
   $('#generate').disabled = busy; $('#generator-size').disabled = busy; $('#generator-difficulty').disabled = busy;
   $('#cancel-generation').hidden = !generationTask;
   $('.generator-card').setAttribute('aria-busy', Boolean(generationTask));
@@ -280,15 +284,18 @@ async function applyDeductions(mode = 'current') {
 function editCell(index, forcedTool) {
   if (busy || !Number.isInteger(index) || index < 0 || index >= board.marks.length) return;
   const currentTool = forcedTool || tool;
-  if (currentTool === 'x' && !forcedTool && board.marks[index] === 1) return;
+  if (currentTool === 'x' && !forcedTool && (board.marks[index] === 1 || board.suspected?.[index])) return;
+  if (currentTool === 'suspected' && board.marks[index] === 1) return;
   const nextMark = currentTool === 'cycle' ? board.marks[index] === 0 ? 1 : board.marks[index] === 1 ? -1 : 0 : currentTool === 'cat' ? 1 : currentTool === 'x' ? !forcedTool && board.marks[index] === -1 ? 0 : -1 : 0;
-  if (currentTool === 'paint' ? board.regions[index] === selectedColor : board.marks[index] === nextMark && !uncertain.has(index)) return;
+  const nextSuspected = currentTool === 'suspected' ? !board.suspected?.[index] : false;
+  if (currentTool === 'paint' ? board.regions[index] === selectedColor : board.marks[index] === nextMark && Boolean(board.suspected?.[index]) === nextSuspected && (currentTool === 'suspected' || !uncertain.has(index))) return;
   record({ manual: true }); board = cloneBoard(board);
   if (currentTool === 'paint') {
     board.regions[index] = selectedColor;
     if (board.generation) board.generation = {...board.generation,edited:true};
-  } else board.marks[index] = nextMark;
-  uncertain.delete(index); currentStep = null; message = { title: 'manualTitle', body: 'manual' }; render();
+  } else { board.marks[index] = nextMark; board.suspected ||= board.marks.map(() => false); board.suspected[index] = nextSuspected; }
+  if (currentTool !== 'suspected') uncertain.delete(index);
+  currentStep = null; message = currentTool === 'suspected' ? {title:'personalHintTitle',body:'personalHintMessage'} : { title: 'manualTitle', body: 'manual' }; render();
 }
 
 function undo() {
@@ -360,7 +367,7 @@ $('#board').addEventListener('pointerdown', event => {
   if (!cell || busy || pointerStroke || !event.isPrimary || ![0,2].includes(event.button)) return;
   event.preventDefault();
   const index = Number(cell.dataset.index), selectedTool = event.button === 2 ? 'x' : tool;
-  const brush = ['x','erase','paint'].includes(selectedTool) ? {tool:selectedTool,value:board.marks[index]===-1?0:-1,color:selectedColor} : null;
+  const brush = ['x','erase','paint','suspected'].includes(selectedTool) ? {tool:selectedTool,value:selectedTool==='suspected'?!board.suspected?.[index]:board.marks[index]===-1?0:-1,color:selectedColor} : null;
   const rectangles = [...$('#board').querySelectorAll('.cell')].map(element => {
     const rect = element.getBoundingClientRect();
     return {index:Number(element.dataset.index),left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
@@ -397,7 +404,7 @@ document.addEventListener('pointerup', event => {
     if (stroke.changed.size || reviewed.length) {
       record({manual:true}); board = stroke.draft;
       reviewed.forEach(index => uncertain.delete(index));
-      currentStep = null; message = {title:'manualTitle',body:'manual'};
+      currentStep = null; message = stroke.tool === 'suspected' ? {title:'personalHintTitle',body:'personalHintMessage'} : {title:'manualTitle',body:'manual'};
     }
     render();
   } else if (!stroke.dragging && cellAtPoint(point(event),stroke.rectangles) === stroke.start) editCell(stroke.start,stroke.tool);
@@ -413,14 +420,14 @@ $('#board').addEventListener('keydown', event => {
   const index = Number(cell.dataset.index), r = Math.floor(index / board.size), c = index % board.size;
   const destination = { ArrowLeft: r * board.size + Math.max(0,c-1), ArrowRight: r * board.size + Math.min(board.size-1,c+1), ArrowUp: Math.max(0,r-1)*board.size+c, ArrowDown: Math.min(board.size-1,r+1)*board.size+c }[event.key];
   if (destination != null) { event.preventDefault(); $('#board').querySelectorAll('[data-index]').forEach(button => { button.tabIndex = Number(button.dataset.index) === destination ? 0 : -1; }); $(`[data-index="${destination}"]`).focus(); }
-  else if ([' ','c','C','x','X','Delete','Backspace'].includes(event.key)) { event.preventDefault(); editCell(index, event.key === ' ' ? 'cycle' : ['c','C'].includes(event.key) ? 'cat' : ['x','X'].includes(event.key) ? 'x' : 'erase'); }
+  else if ([' ','c','C','p','P','x','X','Delete','Backspace'].includes(event.key)) { event.preventDefault(); editCell(index, event.key === ' ' ? 'cycle' : ['c','C'].includes(event.key) ? 'cat' : ['p','P'].includes(event.key) ? 'suspected' : ['x','X'].includes(event.key) ? 'x' : 'erase'); }
 });
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && pointerStroke) { event.preventDefault(); cancelStroke(); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.target.matches('input,textarea,select') && !document.querySelector('dialog[open]')) { event.preventDefault(); event.shiftKey ? redo() : undo(); }
 });
 $('#reset').addEventListener('click', () => $('#reset-dialog').showModal());
-$('#reset-confirm').addEventListener('click', () => { record({ reset: true }); board = { ...board, marks: board.marks.map(() => 0) }; uncertain.clear(); currentStep = null; message = null; $('#reset-dialog').close(); render(); });
+$('#reset-confirm').addEventListener('click', () => { record({ reset: true }); board = { ...board, marks: board.marks.map(() => 0), suspected: board.marks.map(() => false) }; uncertain.clear(); currentStep = null; message = null; $('#reset-dialog').close(); render(); });
 
 // Image recognition is loaded only when importing; no server receives image data.
 async function importImage(input, sample = false, crop = null, forcedSize = 0) {
@@ -508,7 +515,8 @@ export const appActions = {
     if (!Array.isArray(cells) || cells.some(cell => !Number.isInteger(cell.index) || cell.index < 0 || cell.index >= board.marks.length || ![0,1,-1].includes(cell.mark))) throw new Error('Invalid cell edit');
     if (busy) throw new Error('Image import in progress');
     record({ manual: true }); board = cloneBoard(board);
-    for (const cell of cells) { board.marks[cell.index] = cell.mark; uncertain.delete(cell.index); }
+    board.suspected ||= board.marks.map(() => false);
+    for (const cell of cells) { board.marks[cell.index] = cell.mark; board.suspected[cell.index] = false; uncertain.delete(cell.index); }
     currentStep = null; message = { title: 'manualTitle', body: 'manual' }; render(); return { changed: cells.length };
   },
 };

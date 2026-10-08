@@ -25,7 +25,7 @@ npm start
 
 1. Choose, drop, or paste a PNG, JPEG, or WebP screenshot. **Try sample** imports the original Garden puzzle image through the same recognition pipeline.
 2. Review the detected board. If needed, use **Adjust crop / size** to drag a rectangle around the entire colored grid and select its size. Square grids from 2×2 to 20×20 are supported; puzzles must have a valid solution under the rules below.
-3. Click a cell to cycle between cat, X, and empty. The tools above the board select **Cat**, **X**, **Clear**, or **Color** directly. **Edit colors** opens the color palette. Choose a swatch to correct a region; **Add color** creates a missing color. Amber outlines flag uncertain recognition. Correct those cells before solving.
+3. Click a cell to cycle between cat, X, and empty. The tools above the board select **Cat**, **Suspected cat**, **X**, **Clear**, or **Color** directly. **Edit colors** opens the color palette. Choose a swatch to correct a region; **Add color** creates a missing color. Amber outlines flag uncertain recognition. Correct those cells before solving.
 4. Enable the techniques you want to use, then choose one of the three solve actions:
 
 | Action | Behavior |
@@ -38,9 +38,11 @@ Every batch is one undoable action. **Undo** and **Redo** restore both board mar
 
 The language selector is always available. Language and technique preferences are remembered on this device. Puzzle work stays in the current tab and is reset on reload. Screenshot pixels are processed on your computer and are never uploaded. The app makes no external network requests.
 
-Arrow keys move between cells. Space cycles a mark, C places a cat, X excludes a cell, and Delete clears it. Ctrl+Z / Cmd+Z undoes a change; add Shift to redo.
+Arrow keys move between cells. Space cycles a mark, C places a cat, P toggles a suspected cat, X excludes a cell, and Delete clears it. Ctrl+Z / Cmd+Z undoes a change; add Shift to redo.
 
-Drag across cells to mark Xs, even with **Cycle marks** selected. Start on an X to erase Xs for the entire stroke. Right-click also toggles X and supports dragging. X strokes skip existing cats. Select **Clear** to drag away any marks, including cats; **Color** paints regions by dragging. Re-entering a cell during a stroke does not toggle it again. Mouse, pen, and touch use the same controls, with a live preview. Each finished stroke is one Undo action. Escape or an interrupted gesture cancels the preview. A Cat-tool drag does not stamp multiple cats. Dragging inside the grid marks cells; scroll the page from outside the grid on touch devices.
+Drag across cells to mark Xs, even with **Cycle marks** selected. Start on an X to erase Xs for the entire stroke. Right-click also toggles X and supports dragging. X strokes skip confirmed and suspected cats. Select **Clear** to drag away any marks and hints, including cats; **Color** paints regions by dragging. Re-entering a cell during a stroke does not toggle it again. Mouse, pen, and touch use the same controls, with a live preview. Each finished stroke is one Undo action. Escape or an interrupted gesture cancels the preview. A Cat-tool drag does not stamp multiple cats. Dragging inside the grid marks cells; scroll the page from outside the grid on touch devices.
+
+**Suspected cat** shows a cat with a question mark as a personal note. Click or drag to add hints; start on a hint to remove hints. Confirmed cats are preserved. The solver and validation treat hinted cells as ordinary empty candidates: they do not count as cats, exclude neighbors, or influence any deduction. A proven cat or X replaces a hint, and Undo restores it. Use **Cat** or C to confirm a hint, **Clear** or Delete to remove it, or X on the keyboard to explicitly exclude it. Reset marks clears hints too. Personal hints do not confirm uncertain screenshot recognition.
 
 ## Rules and techniques
 

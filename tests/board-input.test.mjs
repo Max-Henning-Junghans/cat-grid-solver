@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cellsAlongSegment,applyBrush} from '../dist/board-input.js';
+import {cloneBoard} from '../dist/example.js';
 
 const cells=Array.from({length:9},(_,index)=>{
   const row=Math.floor(index/3),column=index%3;
@@ -41,4 +42,31 @@ test('clear and color brushes batch edits and preserve generation metadata in th
   assert.equal(painted.board.generation.edited,true);
   assert.equal(board.generation.edited,undefined);
   assert.deepEqual(board.regions,[0,0,0,1,1,1,2,2,2]);
+});
+
+test('personal hints survive X marking, X erasing, and color painting but can be cleared explicitly',()=>{
+  const board=puzzle();board.suspected=Array(9).fill(false);board.suspected[0]=true;
+  for(const value of [-1,0]) {
+    const result=applyBrush(board,[0,1,2,3],{tool:'x',value});
+    assert.equal(result.board.marks[0],0);assert.equal(result.board.suspected[0],true);
+    assert.equal(result.board.marks[2],1);assert.ok(!result.reviewed.includes(0));
+  }
+  assert.equal(applyBrush(board,[0],{tool:'paint',color:2}).board.suspected[0],true);
+  const cleared=applyBrush(board,[0,1,2],{tool:'erase'});
+  assert.deepEqual(cleared.changed,[0,1,2]);assert.ok(cleared.board.suspected.every(value=>!value));
+  const copy=cloneBoard(board);copy.suspected[0]=false;
+  assert.equal(board.suspected[0],true,'snapshots must not share the hint array');
+});
+
+test('hint strokes preserve confirmed cats and erase only hints without reviewing uncertain cells',()=>{
+  const board=puzzle();
+  const hinted=applyBrush(board,[0,1,2,3,0],{tool:'suspected',value:true});
+  assert.deepEqual(hinted.changed,[0,1,3]);assert.deepEqual(hinted.reviewed,[]);
+  assert.deepEqual(hinted.board.marks,[0,0,1,0,0,0,0,0,0]);
+  assert.deepEqual(hinted.board.suspected,[true,true,false,true,false,false,false,false,false]);
+  hinted.board.marks[5]=-1;
+  const erased=applyBrush(hinted.board,[0,1,2,3,5],{tool:'suspected',value:false});
+  assert.deepEqual(erased.changed,[0,1,3]);assert.equal(erased.board.marks[5],-1);
+  assert.equal(erased.board.marks[2],1);assert.ok(erased.board.suspected.every(value=>!value));
+  assert.deepEqual(board.marks,[0,-1,1,0,0,0,0,0,0]);
 });
