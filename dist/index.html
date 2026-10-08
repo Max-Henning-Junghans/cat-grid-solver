@@ -22,6 +22,17 @@
         <div class="import-actions"><button class="button primary-soft" id="choose-image" data-i18n="chooseFile">Choose image</button><button class="text-button" id="sample" data-i18n="sample">Try sample</button><input id="image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden></div>
       </section>
       <p id="import-status" class="status-line" role="status" hidden></p>
+      <section class="generator-card" aria-labelledby="generator-title">
+        <div class="section-line"><h2 id="generator-title" data-i18n="generatorTitle">Generate a puzzle</h2><span class="generator-badge" data-i18n="uniquePuzzle">Unique solution</span></div>
+        <p class="muted" data-i18n="generatorHint">Choose a square size and difficulty. Every puzzle can be solved with the available logical techniques.</p>
+        <form id="generator-form" class="generator-controls">
+          <label><span data-i18n="size">Board size</span><select id="generator-size" aria-label="Board size" data-i18n-aria="size"></select></label>
+          <label><span data-i18n="difficulty">Difficulty</span><select id="generator-difficulty" aria-label="Difficulty" data-i18n-aria="difficulty"><option value="easy" data-i18n="easy">Easy</option><option value="medium" data-i18n="medium" selected>Medium</option><option value="hard" data-i18n="hard">Hard</option><option value="extreme" data-i18n="extreme">Extreme</option></select></label>
+          <button type="submit" class="button" id="generate" data-i18n="generate">Generate puzzle</button><button type="button" class="text-button" id="cancel-generation" data-i18n="cancel" hidden>Cancel</button>
+        </form>
+        <p class="small-help" data-i18n="difficultyHint">Easy uses basic rules. Higher levels need more or stronger advanced deductions. Difficulty is relative to the board size.</p>
+        <p id="generation-status" class="status-line" role="status" aria-live="polite" hidden></p>
+      </section>
       <section class="board-card" aria-labelledby="board-title">
         <div class="board-header"><div><p class="eyebrow" id="board-name">Sample · Garden puzzle</p><h2 id="board-title" data-i18n="board">Puzzle board</h2></div><span class="size-badge" id="board-size">8 × 8</span></div>
         <div class="stats" id="stats"></div>

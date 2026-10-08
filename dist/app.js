@@ -14,6 +14,7 @@ try {
 let board = cloneBoard(example), isSample = true, currentStep = null, message = null;
 let editing = false, tool = 'cycle', selectedColor = 0, uncertain = new Set();
 let undoStack = [], redoStack = [], source = null, busy = false;
+let generationTask = null;
 let cropSelection = null, cropStart = null;
 const t = (key, values) => translate(language, key, values);
 const techniqueName = id => techniques.find(technique => technique.id === id)?.name[language === 'de' ? 1 : 0] || id;
@@ -32,6 +33,7 @@ function restore(state) {
   board = cloneBoard(state.board); isSample = state.isSample; currentStep = state.currentStep; message = state.message;
   uncertain = new Set(state.uncertain); source = state.source;
   selectedColor = Math.min(selectedColor, board.colors.length - 1);
+  setGenerationStatus(null);
 }
 function record(action) {
   undoStack.push({ before: snapshot(), action });
@@ -49,7 +51,18 @@ function setStatus(key, values = {}, error = false) {
 function markSummary(step) {
   return t('changed', { cats: step.changes.filter(change => change.value === 1).length, crosses: step.changes.filter(change => change.value === -1).length });
 }
-const historySteps = () => undoStack.flatMap(entry => entry.action.steps || (entry.action.step ? [entry.action.step] : []));
+const historySteps = () => {
+  const start = undoStack.findLastIndex(entry => entry.action.generated || entry.action.imported);
+  return undoStack.slice(start + 1).flatMap(entry => entry.action.steps || (entry.action.step ? [entry.action.step] : []));
+};
+
+function setGenerationStatus(key, values = {}, error = false) {
+  const status = $('#generation-status');
+  status.dataset.key = key || ''; status.dataset.values = JSON.stringify(values);
+  status.hidden = !key;
+  status.textContent = key ? t(key, { ...values, difficulty: values.difficulty ? t(values.difficulty) : '' }) : '';
+  status.classList.toggle('error', error);
+}
 
 function renderBoard() {
   const activeCell = document.activeElement?.dataset?.index;
@@ -162,7 +175,7 @@ function render() {
   document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach(element => { element.setAttribute('aria-label',t(element.dataset.i18nAria)); });
   $('#language').value = language; $('#language').setAttribute('aria-label', t('language'));
-  $('#board-name').textContent = isSample ? t('sampleName') : board.name || t('importedName');
+  $('#board-name').textContent = isSample ? t('sampleName') : board.generation ? board.generation.edited ? t('generatedEdited') : t('generatedName', {difficulty:t(board.generation.difficulty)}) : board.name || t('importedName');
   $('#board-size').textContent = t('dimensions', { n: board.size });
   $('#stats').replaceChildren();
   const catCount = board.marks.filter(mark => mark === 1).length;
@@ -175,10 +188,52 @@ function render() {
   $('#run').disabled = busy; $('#run').title = t('runHint');
   $('#all-on').disabled = busy; $('#all-off').disabled = busy;
   $('#reset').disabled = busy || board.marks.every(mark => mark === 0);
+  $('#generate').disabled = busy; $('#generator-size').disabled = busy; $('#generator-difficulty').disabled = busy;
+  $('#cancel-generation').hidden = !generationTask;
+  $('.generator-card').setAttribute('aria-busy', Boolean(generationTask));
   renderBoard(); renderTechniques(); renderTools(); renderDeduction(); renderHistory();
   $('#source-panel').hidden = !source;
   if (source) { $('#source-image').src = source.url; $('#source-image').alt = t('screenshot'); }
   const status = $('#import-status'); if (status.dataset.key) status.textContent = t(status.dataset.key, JSON.parse(status.dataset.values || '{}'));
+  const generationStatus = $('#generation-status');
+  if (generationStatus.dataset.key) {
+    const values = JSON.parse(generationStatus.dataset.values || '{}');
+    generationStatus.textContent = t(generationStatus.dataset.key, {...values,difficulty:values.difficulty?t(values.difficulty):''});
+  }
+}
+
+async function generateGame(options = {}) {
+  if (busy) return {status:'busy'};
+  const size = options.size ?? Number($('#generator-size').value), difficulty = options.difficulty ?? $('#generator-difficulty').value;
+  if (!Number.isInteger(size) || size < 4 || size > 20 || !['easy','medium','hard','extreme'].includes(difficulty)) {
+    setGenerationStatus('generationSizeError', {}, true); return {status:'invalid'};
+  }
+  const seed = options.seed ?? crypto.getRandomValues(new Uint32Array(1))[0];
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw new Error('Invalid generation seed');
+  busy = true; $('#generator-size').value = size; $('#generator-difficulty').value = difficulty;
+  setGenerationStatus('generating');
+  try {
+    const result = await new Promise((resolve,reject) => {
+      const worker = new Worker(new URL('./generator-worker.js', import.meta.url), {type:'module'});
+      generationTask = {worker,reject};
+      worker.onmessage = ({data}) => {
+        if (data.type === 'complete') resolve(data.result);
+        else if (data.type === 'error') reject(Object.assign(new Error(data.code),{code:data.code}));
+      };
+      worker.onerror = () => reject(Object.assign(new Error('Generation failed'),{code:'generationError'}));
+      worker.postMessage({size,difficulty,seed}); render();
+    });
+    record({generated:true}); board = result.board; isSample = false; source = null; uncertain.clear();
+    currentStep = null; selectedColor = 0; message = {title:'generatedTitle',body:'generatedHint',values:{size}};
+    setStatus(null); setGenerationStatus('generationSuccess',{size,difficulty});
+    return {status:'generated',size,difficulty,seed};
+  } catch(error) {
+    const code = ['generationCanceled','generationExhausted'].includes(error.code) ? error.code : 'generationError';
+    setGenerationStatus(code,{},code!=='generationCanceled');
+    return {status:code==='generationCanceled'?'canceled':'error',code};
+  } finally {
+    generationTask?.worker.terminate(); generationTask = null; busy = false; render();
+  }
 }
 
 function nextDeduction() {
@@ -218,7 +273,10 @@ function editCell(index, forcedTool) {
   const nextMark = currentTool === 'cycle' ? board.marks[index] === 0 ? 1 : board.marks[index] === 1 ? -1 : 0 : currentTool === 'cat' ? 1 : currentTool === 'x' ? -1 : 0;
   if (currentTool === 'paint' ? board.regions[index] === selectedColor : board.marks[index] === nextMark && !uncertain.has(index)) return;
   record({ manual: true }); board = cloneBoard(board);
-  if (currentTool === 'paint') board.regions[index] = selectedColor; else board.marks[index] = nextMark;
+  if (currentTool === 'paint') {
+    board.regions[index] = selectedColor;
+    if (board.generation) board.generation = {...board.generation,edited:true};
+  } else board.marks[index] = nextMark;
   uncertain.delete(index); currentStep = null; message = { title: 'manualTitle', body: 'manual' }; render();
 }
 
@@ -236,6 +294,11 @@ $('#language').addEventListener('change', event => { language = event.target.val
 $('#next').addEventListener('click', nextDeduction); $('#undo').addEventListener('click', undo); $('#redo').addEventListener('click', redo);
 $('#apply-all').addEventListener('click', () => applyDeductions('current'));
 $('#run').addEventListener('click', () => applyDeductions('until'));
+$('#generator-form').addEventListener('submit', event => { event.preventDefault(); generateGame(); });
+$('#cancel-generation').addEventListener('click', () => {
+  if (!generationTask) return;
+  generationTask.worker.terminate(); generationTask.reject(Object.assign(new Error('Canceled'),{code:'generationCanceled'}));
+});
 $('#technique-list').addEventListener('change', event => {
   if (!event.target.matches('input[type=checkbox]')) return;
   if (event.target.checked) enabled.add(event.target.value); else enabled.delete(event.target.value);
@@ -278,6 +341,7 @@ async function importImage(input, sample = false, crop = null, forcedSize = 0) {
     const parsed = parseScreenshot(loadedSource.image, { crop, size: forcedSize });
     record({ imported: true });
     board = parsed.board; isSample = sample; board.name = sample ? example.name : '';
+    setGenerationStatus(null);
     source = { ...loadedSource, crop: parsed.crop }; uncertain = new Set(parsed.uncertain);
     selectedColor = 0; currentStep = null;
     message = { title: 'reviewTitle', body: uncertain.size ? 'uncertain' : 'reviewColors', values: { count: uncertain.size } };
@@ -329,13 +393,15 @@ $('#parse-crop').addEventListener('click', () => {
   importImage(null, isSample, { x: cropSelection.x*source.image.width/canvas.width, y: cropSelection.y*source.image.height/canvas.height, width: cropSelection.width*source.image.width/canvas.width, height: cropSelection.height*source.image.height/canvas.height }, Number($('#crop-size').value));
 });
 for (let n = 2; n <= 20; n++) { const option = document.createElement('option'); option.value = n; option.textContent = `${n} × ${n}`; $('#crop-size').append(option); }
+for (let n = 4; n <= 20; n++) { const option = document.createElement('option'); option.value = n; option.textContent = `${n} × ${n}`; $('#generator-size').append(option); }
+$('#generator-size').value = 8;
 
 render();
 
 // Shared application actions also power optional browser agent tools.
 export const appActions = {
   read: () => ({ board: cloneBoard(board), enabled: [...enabled], language, uncertain: [...uncertain], validation: validateBoard(board) }),
-  next: nextDeduction, all: () => applyDeductions('current'), run: () => applyDeductions('until'), undo,
+  next: nextDeduction, all: () => applyDeductions('current'), run: () => applyDeductions('until'), undo, generate: generateGame,
   configure(ids) {
     if (!Array.isArray(ids) || ids.some(id => !techniques.some(technique => technique.id === id))) throw new Error('Unknown technique');
     enabled = new Set(ids); persistTechniques(); render(); return { enabled: [...enabled] };

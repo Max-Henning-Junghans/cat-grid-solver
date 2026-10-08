@@ -34,7 +34,16 @@ select { border: 1px solid var(--line); background: white; border-radius: 8px; p
 .text-button, .icon-button { border: 0; background: transparent; font-size: .875rem; font-weight: 600; padding: 6px 3px; color: var(--accent); min-height: 36px; }
 .text-button:hover:not(:disabled), .icon-button:hover:not(:disabled) { text-decoration: underline; }
 .icon-button { padding: 8px; }
-.board-card, .techniques-card, .history-card, .source-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: var(--shadow); }
+.board-card, .techniques-card, .history-card, .source-panel, .generator-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; box-shadow: var(--shadow); }
+.generator-card > .muted { margin-top: 7px; }
+.generator-badge { font-size: .75rem; color: var(--accent); white-space: nowrap; }
+.generator-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 15px; }
+.generator-controls label { display: flex; flex-direction: column; gap: 5px; font-size: .875rem; flex: 1 1 130px; }
+.generator-controls select { min-height: 44px; width: 100%; }
+.generator-controls .button { flex: 1 1 auto; }
+.generator-card .status-line { padding: 0; margin-top: 12px; }
+.generator-card[aria-busy=true] #generation-status::before { content: ''; display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; margin-right: 8px; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .board-header, .section-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .eyebrow { font-size: .75rem; font-weight: 650; color: var(--muted); margin-bottom: 2px; }
 .size-badge, .count-badge { border-radius: 6px; background: var(--background); padding: 5px 9px; font-size: .875rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -117,6 +126,6 @@ dialog > p { margin-top: 12px; }
 @media (max-width: 1000px) { .workspace { grid-template-columns: minmax(0,1fr) 305px; gap: 18px; padding: 0 20px 40px; } .topbar { padding: 22px 20px; } .board-card { padding: 18px; } .import-icon { display: none; } .import-card { padding: 16px; gap: 10px; } .import-actions { align-items: flex-end; } }
 @media (max-width: 800px) { .workspace { grid-template-columns: 1fr; max-width: 700px; } .topbar { max-width: 700px; } .techniques-column { display: grid; grid-template-columns: 1fr; } .cell { font-size: clamp(1.15rem,5vw,2.35rem); } .technique p { font-size: .875rem; } }
 @media (max-width: 450px) { .workspace { padding: 0 10px 25px; gap: 14px; } .topbar { padding: 16px 12px; gap: 8px; } .brand { gap: 9px; } .brand-mark { width: 39px; height: 39px; font-size: 1.25rem; } h1 { font-size: 1.35rem; } .brand p { font-size: .75rem; } .language > span { display: none; } .language select { padding: 7px; } .import-card { flex-wrap: wrap; padding: 14px; } .import-actions { flex-direction: row; align-items: center; gap: 14px; width: 100%; } .board-card { padding: 13px; border-radius: 14px; } .board { gap: 3px; padding: 3px; } .board-wrap { grid-template-columns: 17px minmax(0,1fr); gap: 2px; } .cell { border-radius: 3px; } .cell .color-letter { left: 2px; top: 0; font-size: .75rem; } .cell .mark { position: relative; z-index: 1; } .cell:has(.mark:not(:empty)) .color-letter { visibility: hidden; } .stats { gap: 12px; } .board-actions { flex-wrap: wrap; gap: 5px; } .next-button { flex-basis: 100%; } .deduction-card { padding: 19px; } .board-footer { flex-wrap: wrap; gap: 4px; } .source-panel { padding: 16px; } }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 @media (max-width: 550px) { .solve-buttons { grid-template-columns: 1fr; gap: 7px; } .next-button { flex-basis: auto; } }
 .board .cell { font-size: clamp(.65rem,calc(58cqw / var(--size)),2.25rem); color: var(--cell-ink); }

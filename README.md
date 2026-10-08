@@ -1,6 +1,6 @@
 # Cat Grid Solver
 
-A local browser app that imports colored cat grid puzzle screenshots and explains logical solving steps. It includes English and German, editable color regions and marks, and eleven individually selectable techniques. No runtime packages, accounts, or image services are required.
+A local browser app that imports colored cat grid puzzle screenshots, generates new puzzles, and explains logical solving steps. It includes English and German, editable color regions and marks, and eleven individually selectable techniques. No runtime packages, accounts, or image services are required.
 
 An independent project with an original demo puzzle and generated test images. It is not affiliated with any puzzle app publisher.
 
@@ -48,6 +48,18 @@ Basic techniques exclude neighbors or other cells in a cat's row, column, or col
 
 The recognizer finds a regular colored grid, groups tile colors, and distinguishes cat shapes from X strokes. It is tuned for clear app screenshots. Cropped cells, animations, unusual marks, and very similar colors may need manual correction. Recognition uncertainty and rule conflicts are shown on the board.
 
+## Puzzle generation
+
+Use **Generate a puzzle** to choose a square size from 4×4 through 20×20 and one of **Easy**, **Medium**, **Hard**, or **Extreme**. The original rules require square boards: exactly one cat per row and column implies equal counts of rows and columns. Sizes 2 and 3 cannot satisfy the no-touch rule.
+
+Generated puzzles have connected color regions, no prefilled marks, and one unique cat placement. The generator accepts a board only when the logical solver completes it; that sequence of sound deductions fixes every cat and certifies uniqueness. Larger boards grow from fresh smaller layouts by inserting safe cat positions and connected region bridges, with the difficulty checked after each expansion.
+
+Difficulty follows this solver's deduction order and is relative to the selected size. Basic deductions contribute zero points; line confinement and shared neighbors contribute one each, pairs/triples three, and compatibility deductions five. Easy requires zero advanced points, Medium 1–2, Hard 3–4, and Extreme 5 or more. Ratings measure the verified logical path, rather than a human difficulty guarantee or a globally shortest solution.
+
+Generation runs locally in a worker, keeping the interface responsive. **Cancel** keeps the current board. A successful generation replaces the board in one undoable action, starts a fresh deduction history, and preserves your technique switches. Harder puzzles may need techniques you currently have disabled. If a matching puzzle cannot be found within 20 seconds, the existing board stays in place and you can try again. English/German applies to generation controls and messages too.
+
+For reproducible development examples, `generatePuzzle({size, difficulty, seed})` in `dist/generator.js` accepts a 32-bit seed. The visible button chooses a fresh random seed each time.
+
 ## Verify
 
 ```powershell
@@ -55,6 +67,6 @@ npm test
 npm run check
 ```
 
-Tests cover the generated demo screenshot, original geometric cat and X marks, grid sizes, crop recovery, uncertain marks, the distinction between snapshot and chained batches, and every technique against an independent exhaustive solution oracle. Screenshot fixtures are compressed RGBA data, so the tests need only Node. `node scripts/create-fixtures.mjs` regenerates the demo PNG and fixtures without dependencies.
+Tests cover generated puzzle uniqueness using an independent exact solution counter at sizes 4, 8, 12, and 20; all difficulty levels; reproducible seeds; and generation failure. They also cover the generated demo screenshot, original geometric cat and X marks, grid sizes, crop recovery, uncertain marks, the distinction between snapshot and chained batches, and every technique against an independent exhaustive solution oracle. Screenshot fixtures are compressed RGBA data, so the tests need only Node. `node scripts/create-fixtures.mjs` regenerates the demo PNG and fixtures without dependencies.
 
 The browser app is in `dist/`; `server.mjs` serves it locally. Optional WebMCP tools use the same board actions as the visible buttons when the browser supports them.
