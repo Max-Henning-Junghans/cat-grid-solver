@@ -50,7 +50,7 @@ There must be exactly one cat in every row, column, and color. Cats cannot touch
 
 Basic techniques exclude neighbors or other cells in a cat's row, column, or color, and place a cat when a unit has one remaining cell. Advanced techniques use confined colors, common neighbors, pairs/triples, and incompatible candidate positions. **Compatible cat pairs** considers two rows, columns, or colors together: it checks their legal two-cat arrangements and excludes cells ruled out by every arrangement. This is a bounded logical pattern, with no recursive search. Each technique can be disabled independently; disabled techniques never make changes implicitly. After an update, use **All on** or enable the new technique explicitly if your saved selection does not include it.
 
-The recognizer finds a regular colored grid, groups tile colors, and distinguishes cat shapes from X strokes. It is tuned for clear app screenshots. Cropped cells, animations, unusual marks, and very similar colors may need manual correction. Recognition uncertainty and rule conflicts are shown on the board.
+The recognizer finds a regular colored grid, groups tile colors, and distinguishes cat shapes from thin or bold rounded X strokes. It samples paint near tile edges so large marks and JPEG-tinted white crosses do not replace a region's background color. It is tuned for clear app screenshots. Cropped cells, animations, unusual marks, and very similar colors may need manual correction. Recognition uncertainty and rule conflicts are shown on the board.
 
 ## Puzzle generation
 
@@ -71,6 +71,6 @@ npm test
 npm run check
 ```
 
-Tests cover generated puzzle uniqueness using an independent exact solution counter at sizes 4, 8, 12, and 20; all difficulty levels; reproducible seeds; and generation failure. They also cover the generated demo screenshot, original geometric cat and X marks, grid sizes, crop recovery, uncertain marks, the distinction between snapshot and chained batches, and every technique against an independent exhaustive solution oracle. Screenshot fixtures are compressed RGBA data, so the tests need only Node. `node scripts/create-fixtures.mjs` regenerates the demo PNG and fixtures without dependencies.
+Tests cover generated puzzle uniqueness using an independent exact solution counter at sizes 4, 8, 12, and 20; all difficulty levels; reproducible seeds; and generation failure. They also cover the generated demo screenshot, original geometric cat and X marks, bold rounded and tinted-white crosses, multicolor cat faces, noisy tile colors, grid sizes, crop recovery, uncertain marks, the distinction between snapshot and chained batches, and every technique against an independent exhaustive solution oracle. Screenshot fixtures are compressed RGBA data, so the tests need only Node. `node scripts/create-fixtures.mjs` regenerates the demo PNG and fixtures without dependencies.
 
 The browser app is in `dist/`; `server.mjs` serves it locally. Optional WebMCP tools use the same board actions as the visible buttons when the browser supports them.

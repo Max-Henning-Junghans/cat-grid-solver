@@ -94,7 +94,11 @@ export function locateGrid(pixels,{crop=null,size=0}={}) {
 function backgroundColor(pixels,cx,cy,width,height) {
   const bins=new Map(),samples=[];
   const stride=Math.max(1,Math.floor(Math.min(width,height)/36));
-  for(let y=cy-height*.37;y<cy+height*.37;y+=stride)for(let x=cx-width*.37;x<cx+width*.37;x+=stride) {
+  for(let y=cy-height*.43;y<cy+height*.43;y+=stride)for(let x=cx-width*.43;x<cx+width*.43;x+=stride) {
+    const dx=Math.abs(x-cx)/width,dy=Math.abs(y-cy)/height;
+    // Read paint near the middle of each edge. Large marks fill the center,
+    // while rounded tile corners, labels, and X tips can contaminate corners.
+    if(!((dx>.32&&dy<.24)||(dy>.32&&dx<.24)))continue;
     const color=rgb(pixels,x,y),max=Math.max(...color),min=Math.min(...color);
     // Favor tile paint over dark cats, bright X marks, and JPEG edge artifacts.
     if(max<65||min>245)continue;
@@ -105,7 +109,9 @@ function backgroundColor(pixels,cx,cy,width,height) {
   if(!winner)return {color:rgb(pixels,cx,cy),uncertain:true};
   const near=samples.filter(color=>distance(color,winner.color)<20);
   const color=[0,1,2].map(channel=>near.reduce((sum,sample)=>sum+sample[channel],0)/near.length);
-  return {color,uncertain:winner.count/samples.length<.18};
+  // JPEG shading may split one paint color across several quantization bins.
+  // Measure support for the whole matching cluster, not just its largest bin.
+  return {color,uncertain:near.length/samples.length<.18};
 }
 
 export function classifyMark(pixels,{cx,cy,width,height},background) {
@@ -120,17 +126,22 @@ export function classifyMark(pixels,{cx,cy,width,height},background) {
   const minX=Math.min(...points.map(p=>p.x)),maxX=Math.max(...points.map(p=>p.x)),minY=Math.min(...points.map(p=>p.y)),maxY=Math.max(...points.map(p=>p.y));
   const w=maxX-minX+stride,h=maxY-minY+stride;
   if(w<width*.1||h<height*.1)return {mark:0,uncertain:true,confidence:.3};
-  let diagonal=0;const arms=[0,0,0,0];
+  let diagonal=0,wideDiagonal=0;const arms=[0,0,0,0];
   for(const point of points) {
     const x=(point.x-minX)/w,y=(point.y-minY)/h;
-    if(Math.min(Math.abs(x-y),Math.abs(x+y-1))<.155)diagonal++;
+    const deviation=Math.min(Math.abs(x-y),Math.abs(x+y-1));
+    if(deviation<.155)diagonal++;
+    if(deviation<.24)wideDiagonal++;
     if(x<.35&&y<.35)arms[0]++;if(x>.65&&y<.35)arms[1]++;if(x<.35&&y>.65)arms[2]++;if(x>.65&&y>.65)arms[3]++;
   }
-  const diagonality=diagonal/points.length,aspect=w/h;
-  if(diagonality>.76&&arms.every(count=>count>points.length*.025)&&aspect>.6&&aspect<1.65)return {mark:-1,uncertain:false,confidence:diagonality};
+  const diagonality=diagonal/points.length,wideDiagonality=wideDiagonal/points.length,aspect=w/h;
+  // Rounded, bold crosses extend well beyond a thin diagonal centerline.
+  // Require almost all foreground to fit the wider X, with all four arms;
+  // a filled cat face also occupies the off-diagonal areas and fails this fit.
+  if(wideDiagonality>.92&&arms.every(count=>count>points.length*.025)&&aspect>.6&&aspect<1.65)return {mark:-1,uncertain:false,confidence:wideDiagonality};
   const fill=points.length*stride*stride/(w*h);
-  if(ratio>.05&&fill>.28&&diagonality<.72)return {mark:1,uncertain:false,confidence:Math.min(.96,.65+ratio)};
-  return {mark:diagonality>.7?-1:ratio>.04?1:0,uncertain:true,confidence:.45};
+  if(ratio>.05&&fill>.28&&wideDiagonality<.86)return {mark:1,uncertain:false,confidence:Math.min(.96,.65+ratio)};
+  return {mark:diagonality>.7||wideDiagonality>=.86?-1:ratio>.04?1:0,uncertain:true,confidence:.45};
 }
 
 export function parsePixels(pixels,options={}) {
