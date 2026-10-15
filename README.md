@@ -48,7 +48,7 @@ Drag across cells to mark Xs, even with **Cycle marks** selected. Start on an X 
 
 There must be exactly one cat in every row, column, and color. Cats cannot touch, including diagonally. The solver uses logical constraints and never backtracks or guesses. An ambiguous puzzle may remain partially solved.
 
-Basic techniques exclude neighbors or other cells in a cat's row, column, or color, and place a cat when a unit has one remaining cell. Advanced techniques use confined colors, common neighbors, pairs/triples, and incompatible candidate positions. Each technique can be disabled independently; disabled techniques never make changes implicitly.
+Basic techniques exclude neighbors or other cells in a cat's row, column, or color, and place a cat when a unit has one remaining cell. Advanced techniques use confined colors, common neighbors, pairs/triples, and incompatible candidate positions. **Compatible cat pairs** considers two rows, columns, or colors together: it checks their legal two-cat arrangements and excludes cells ruled out by every arrangement. This is a bounded logical pattern, with no recursive search. Each technique can be disabled independently; disabled techniques never make changes implicitly. After an update, use **All on** or enable the new technique explicitly if your saved selection does not include it.
 
 The recognizer finds a regular colored grid, groups tile colors, and distinguishes cat shapes from X strokes. It is tuned for clear app screenshots. Cropped cells, animations, unusual marks, and very similar colors may need manual correction. Recognition uncertainty and rule conflicts are shown on the board.
 
@@ -58,7 +58,7 @@ Use **Generate a puzzle** to choose a square size from 4×4 through 20×20 and o
 
 Generated puzzles have connected color regions, no prefilled marks, and one unique cat placement. The generator accepts a board only when the logical solver completes it; that sequence of sound deductions fixes every cat and certifies uniqueness. Larger boards grow from fresh smaller layouts by inserting safe cat positions and connected region bridges, with the difficulty checked after each expansion.
 
-Difficulty follows this solver's deduction order and is relative to the selected size. Basic deductions contribute zero points; line confinement and shared neighbors contribute one each, pairs/triples three, and compatibility deductions five. Easy requires zero advanced points, Medium 1–2, Hard 3–4, and Extreme 5 or more. Ratings measure the verified logical path, rather than a human difficulty guarantee or a globally shortest solution.
+Difficulty follows this solver's deduction order and is relative to the selected size. Basic deductions contribute zero points; line confinement and shared neighbors contribute one each, pairs/triples three, compatibility deductions five, and compatible cat pairs eight. Easy requires zero advanced points, Medium 1–2, Hard 3–4, and Extreme 5 or more. Ratings measure the verified logical path, rather than a human difficulty guarantee or a globally shortest solution.
 
 Generation runs locally in a worker, keeping the interface responsive. **Cancel** keeps the current board. A successful generation replaces the board in one undoable action, starts a fresh deduction history, and preserves your technique switches. Harder puzzles may need techniques you currently have disabled. If a matching puzzle cannot be found within 20 seconds, the existing board stays in place and you can try again. English/German applies to generation controls and messages too.
 

@@ -1,7 +1,7 @@
 import {resolveUntilStuck, validateBoard} from './solver.js';
 
 export const difficulties = ['easy', 'medium', 'hard', 'extreme'];
-const weights = {locked: 1, overlap: 1, pairs: 3, compatibility: 5};
+const weights = {locked: 1, overlap: 1, pairs: 3, compatibility: 5, joint: 8};
 
 function analyze(board) {
   const result = resolveUntilStuck(board);

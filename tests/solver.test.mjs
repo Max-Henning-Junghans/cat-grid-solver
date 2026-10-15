@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { example, cloneBoard } from '../dist/example.js';
 import { techniques, findNextDeduction, applyDeduction, validateBoard, neighbors, resolveCurrent, resolveUntilStuck } from '../dist/solver.js';
+import {explain} from '../dist/i18n.js';
 
 // Independent exhaustive oracle, used only in tests; the app never guesses.
 function solutions(board) {
@@ -86,6 +87,32 @@ test('the solver leaves an ambiguous board without inventing a cat', () => {
   const board = {size:5, colors:Array(5).fill('#aabbcc'), regions:Array.from({length:25},(_,i)=>Math.floor(i/5)), marks:Array(25).fill(0)};
   assert.ok(solutions(board).length > 1);
   assert.equal(findNextDeduction(board).status,'stuck');
+});
+
+test('compatible cat pairs unlock a stalled puzzle and provide translated explanations without guessing',()=>{
+  // Independently seeded synthetic regression, unrelated to an imported puzzle.
+  const board={size:6,colors:Array(6).fill('#aabbcc'),
+    regions:[4,0,2,1,5,0,5,2,4,1,2,3,0,4,3,4,4,2,3,5,1,5,0,1,3,2,4,1,4,2,3,3,4,2,5,2],
+    marks:[-1,0,0,0,0,0,0,0,0,0,-1,0,0,0,0,0,0,0,0,0,0,-1,0,0,0,-1,0,-1,0,-1,0,0,-1,0,0,0],
+    suspected:Array(36).fill(true)};
+  const legacy=techniques.filter(technique=>technique.id!=='joint').map(technique=>technique.id);
+  assert.equal(findNextDeduction(board,legacy).status,'stuck');
+  assert.equal(resolveCurrent(board,legacy).steps.length,0);
+  const possible=solutions(board);assert.equal(possible.length,1);
+  const result=findNextDeduction(board,['joint']);assert.equal(result.status,'step');
+  assert.deepEqual(result.step.changes,[{index:14,value:-1}]);
+  assert.equal(result.step.reason.count,9);
+  for(const language of ['en','de']) {
+    const text=explain(language,board,result.step);assert.ok(text.includes('9'));assert.ok(!/\{\w+\}/.test(text));assert.ok(text.length>80);
+  }
+  const changed=applyDeduction(board,result.step);
+  assert.equal(changed.suspected[14],false);assert.equal(board.suspected[14],true);
+  const batch=resolveCurrent(board);assert.ok(batch.steps.length);assert.ok(batch.steps.every(step=>step.technique==='joint'));
+  for(const step of batch.steps)for(const change of step.changes)assert.equal(possible[0].includes(change.index),change.value===1);
+  const solved=resolveUntilStuck(board);assert.equal(solved.status,'solved');
+  assert.deepEqual(solved.board.marks.flatMap((mark,index)=>mark===1?[index]:[]),possible[0]);
+  assert.ok(solved.steps.some(step=>step.technique==='joint'));
+  assert.ok(resolveUntilStuck(board,['joint']).steps.every(step=>step.technique==='joint'));
 });
 
 test('personal hints never affect validation, selected deductions, snapshot passes, or chained solving',()=>{

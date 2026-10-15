@@ -28,6 +28,7 @@ export const copy = {
     overlap: 'Every possible position of the cat in {unit} touches the highlighted cells. Those cells cannot contain a cat.',
     compatibility: 'A cat in any highlighted cell would block every remaining cat position in {unit}, through a shared row, column, color, or touching. Those cells must be X.',
     groups: '{sources} need {count} cats and can use only {targets}. Those lines or colors are reserved, so the highlighted cells are X.',
+    joint: '{source} and {target} must each contain a cat. Their outlined candidates allow {count} pairs that share no row, column, or color and do not touch. Every such pair rules out the highlighted cells, so those cells are X.',
     importing: 'Reading the board…', importSuccess: 'Screenshot imported. Check the colors and marks; you can correct any cell.', importError: 'Could not read this image. Try a sharper screenshot or adjust the board crop.', fileError: 'Choose a PNG, JPEG, or WebP image.', tooLarge: 'This image is too large. Use an image smaller than 25 MB.',
     screenshot: 'Source screenshot', adjust: 'Adjust crop / size', hideSource: 'Hide screenshot', showSource: 'Show screenshot',
     cropTitle: 'Select the board', cropHint: 'Drag a rectangle tightly around the colored grid, including its outer cells. Confirm the board size, then read it again.', size: 'Board size', auto: 'Auto', parseCrop: 'Read selected board', cancel: 'Cancel', cropMissing: 'Select a rectangle around the board first.',
@@ -66,6 +67,7 @@ export const copy = {
     overlap: 'Jede mögliche Position der Katze in {unit} berührt die hervorgehobenen Felder. Dort kann keine Katze stehen.',
     compatibility: 'Eine Katze in einem hervorgehobenen Feld würde alle übrigen Katzenplätze in {unit} blockieren: durch gleiche Zeile, Spalte, Farbe oder Berührung. Diese Felder müssen X sein.',
     groups: '{sources} brauchen {count} Katzen und können nur {targets} nutzen. Diese Linien oder Farben sind reserviert; die hervorgehobenen Felder sind X.',
+    joint: '{source} und {target} benötigen jeweils eine Katze. Ihre umrandeten Kandidaten erlauben {count} Paare ohne gemeinsame Zeile, Spalte oder Farbe und ohne Berührung. Jedes dieser Paare schließt die hervorgehobenen Felder aus; sie sind daher X.',
     importing: 'Spielfeld wird erkannt …', importSuccess: 'Screenshot importiert. Prüfe Farben und Markierungen; jedes Feld lässt sich korrigieren.', importError: 'Dieses Bild konnte nicht gelesen werden. Versuche einen schärferen Screenshot oder passe den Ausschnitt an.', fileError: 'Wähle ein PNG-, JPEG- oder WebP-Bild.', tooLarge: 'Das Bild ist zu groß. Verwende ein Bild unter 25 MB.',
     screenshot: 'Original-Screenshot', adjust: 'Ausschnitt / Größe anpassen', hideSource: 'Screenshot ausblenden', showSource: 'Screenshot anzeigen',
     cropTitle: 'Spielfeld auswählen', cropHint: 'Ziehe einen Rahmen eng um das farbige Raster einschließlich der äußeren Felder. Bestätige die Größe und lies es erneut ein.', size: 'Spielfeldgröße', auto: 'Automatisch', parseCrop: 'Auswahl einlesen', cancel: 'Abbrechen', cropMissing: 'Wähle zuerst einen Rahmen um das Spielfeld.',
@@ -91,7 +93,7 @@ export function explain(lang, board, step) {
     cell: Number.isInteger(r.cat) ? translate(lang, 'cell', { r: Math.floor(r.cat / board.size) + 1, c: r.cat % board.size + 1 }) : '',
     source: r.source ? unitName(lang, r.source) : '', target: r.target ? unitName(lang, r.target) : '',
     sources: r.sourceIds ? r.sourceIds.map(index => unitName(lang, { type: r.sourceType, index })).join(', ') : '',
-    targets: r.targetIds ? r.targetIds.map(index => unitName(lang, { type: r.targetType, index })).join(', ') : '', count: r.sourceIds?.length || 0,
+    targets: r.targetIds ? r.targetIds.map(index => unitName(lang, { type: r.targetType, index })).join(', ') : '', count: r.count ?? r.sourceIds?.length ?? 0,
   };
   return translate(lang, r.kind, values);
 }

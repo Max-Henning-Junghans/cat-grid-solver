@@ -10,6 +10,7 @@ export const techniques = [
   { id: 'overlap', level: 'advanced', name: ['Shared neighbors', 'Gemeinsame Nachbarfelder'], description: ['Exclude cells that touch every possible position of a required cat.', 'Schließe Felder aus, die jede mögliche Position einer benötigten Katze berühren.'] },
   { id: 'pairs', level: 'advanced', name: ['Pairs and triples', 'Paare und Dreiergruppen'], description: ['Two or three colors restricted to the same number of rows or columns reserve those lines. Also works in reverse.', 'Zwei oder drei Farben in ebenso vielen Zeilen oder Spalten reservieren diese Linien. Gilt auch umgekehrt.'] },
   { id: 'compatibility', level: 'advanced', name: ['No compatible cat position', 'Keine passende Katzenposition'], description: ['Exclude a cell if it would block every cat position in another row, column, or color.', 'Schließe ein Feld aus, wenn es jeden Katzenplatz in einer anderen Zeile, Spalte oder Farbe blockiert.'] },
+  { id: 'joint', level: 'advanced', name: ['Compatible cat pairs', 'Verträgliche Katzenpaare'], description: ['Consider the two cats in a pair of rows, columns, or colors together. Exclude a cell if every compatible pair rules it out.', 'Betrachte die beiden Katzen in zwei Zeilen, Spalten oder Farben gemeinsam. Schließe ein Feld aus, wenn jedes verträgliche Paar es ausschließt.'] },
 ];
 
 export function units(board) {
@@ -130,6 +131,28 @@ function* deductions(board, enabled) {
         const blocked = board.marks.flatMap((mark, index) => mark === 0 && !unit.cells.includes(index) && unit.candidates.every(candidate => conflicts(index, candidate, board)) ? [index] : []);
         const step = makeStep(board, technique.id, blocked, -1, { kind: 'compatibility', type: unit.type, index: unit.index }, unit.candidates);
         if (step) yield step;
+      }
+    } else if (technique.id === 'joint') {
+      const candidates = board.marks.flatMap((mark,index) => mark === 0 ? [index] : []);
+      const bits = new Map(candidates.map((index,position) => [index,1n << BigInt(position)]));
+      const all = (1n << BigInt(candidates.length)) - 1n;
+      const blockedBy = new Map(candidates.map(cat => [cat,candidates.reduce((mask,index) => index !== cat && conflicts(index,cat,board) ? mask | bits.get(index) : mask,0n)]));
+      for (const type of ['row','column','region']) {
+        const sourceUnits = unfinished.filter(unit => unit.type === type && unit.candidates.length);
+        for (const [first,second] of combinations(sourceUnits,2)) {
+          // Intersect the cells excluded by every legal two-cat arrangement.
+          // The units have the same type, so their cats occupy distinct cells.
+          let blocked = all, count = 0;
+          pairLoop: for (const a of first.candidates) for (const b of second.candidates) {
+            if (blockedBy.get(a) & bits.get(b)) continue;
+            blocked &= blockedBy.get(a) | blockedBy.get(b); count++;
+            if (blocked === 0n) break pairLoop;
+          }
+          if (!count || blocked === 0n) continue;
+          const targets = candidates.filter(index => blocked & bits.get(index));
+          const step = makeStep(board,technique.id,targets,-1,{kind:'joint',source:{type,index:first.index},target:{type,index:second.index},count},[...first.candidates,...second.candidates]);
+          if (step) yield step;
+        }
       }
     }
   }
