@@ -1,12 +1,14 @@
 # Cat Grid Solver
 
-A local browser app that imports colored cat grid puzzle screenshots, generates new puzzles, and explains logical solving steps. It includes English and German, editable color regions and marks, and eleven individually selectable techniques. No runtime packages, accounts, or image services are required.
+A browser app that imports colored cat grid puzzle screenshots, generates new puzzles, and explains logical solving steps. It includes English and German, editable color regions and marks, and individually selectable techniques. No runtime packages or image services are required.
 
 An independent project with an original demo puzzle and generated test images. It is not affiliated with any puzzle app publisher.
 
 ![Cat Grid Solver with puzzle generation, input tools, and an explained deduction](preview.jpg)
 
 ## Start
+
+The hosted app is available at [Cat Grid Solver](https://cat-grid-solver.wellmoon2.chatgpt.site). The Site starts private to its owner and requires ChatGPT sign-in. You can also run it locally without an account:
 
 Requires Node.js 20 or newer. From this directory, run:
 
@@ -74,3 +76,11 @@ npm run check
 Tests cover generated puzzle uniqueness using an independent exact solution counter at sizes 4, 8, 12, and 20; all difficulty levels; reproducible seeds; and generation failure. They also cover the generated demo screenshot, original geometric cat and X marks, bold rounded and tinted-white crosses, multicolor cat faces, noisy tile colors, grid sizes, crop recovery, uncertain marks, the distinction between snapshot and chained batches, and every technique against an independent exhaustive solution oracle. Screenshot fixtures are compressed RGBA data, so the tests need only Node. `node scripts/create-fixtures.mjs` regenerates the demo PNG and fixtures without dependencies.
 
 The browser app is in `dist/`; `server.mjs` serves it locally. Optional WebMCP tools use the same board actions as the visible buttons when the browser supports them.
+
+## Hosting and Git versioning
+
+[GitHub](https://github.com/Max-Henning-Junghans/cat-grid-solver) remains the public source repository and `origin` remote. The tracked `.openai/hosting.json` identifies the ChatGPT Site and publishes only `dist/` as static files. The local Node server, tests, Git history, and source screenshots are not part of the deployment archive. Screenshot recognition and puzzle generation still run in each visitor's browser.
+
+Sites keeps its own source repository and saved deployment versions. The Sites workflow pushes the same Git commit from this checkout to that repository using a temporary credential; it does not replace `origin` or rewrite Git history. Each saved Site version records that commit, so a deployed version can be matched to the corresponding GitHub revision. A GitHub push alone does not redeploy the Site.
+
+To publish an update through the Sites plugin, reuse the `project_id` in the manifest, obtain a fresh source write credential, and open this checkout with the supported `site-workflow.mjs` helper. Run the checks above, then use that helper to synchronize the source and package the static deployment. Save and deploy its returned commit and archive through Sites, preserving the Site's audience, and push that same commit to GitHub `origin/main`. Credentials stay in memory and are sent to the helper through stdin; never commit them. Keep deployment archives outside this repository.
